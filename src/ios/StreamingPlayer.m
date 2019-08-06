@@ -27,8 +27,6 @@
     NSString* callbackId;
     AVPlayerViewController *moviePlayer;
     BOOL shouldAutoClose;
-    UIColor *backgroundColor;
-    UIImageView *imageView;
     BOOL initFullscreen;
     NSString *mOrientation;
     AVQueuePlayerPrevious *movie;
@@ -287,7 +285,6 @@
 
 - (void)cleanup {
     NSLog(@"Clean up called");
-    imageView = nil;
     initFullscreen = false;
     backgroundColor = nil;
     
@@ -321,9 +318,6 @@
 
 -(void) fireEvent:(NSString *) name data:(NSDictionary *) data {
     NSLog(@"firing event %@ with data %@", name, data);
-    NSDictionary *dictionary = @{
-        @"test" : @"test",
-    };
 
     NSString *function = [NSString stringWithFormat:@"cordova.fireDocumentEvent('%@', '%@')", name, data];
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -332,6 +326,23 @@
         else
           [(UIWebView*)[self webView] stringByEvaluatingJavaScriptFromString: function];
     });
+}
+
+-(NSString *) toJSONString:(NSDictionary *) data {
+    return dictionaryAsJSONString(data);
+}
+
+NSString* dictionaryAsJSONString(NSDictionary *dict) {
+    NSError *error;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:dict options:0 error:&error];
+    NSString *jsonString;
+    if (! jsonData) {
+        jsonString = [NSString stringWithFormat:@"Error creating JSON for  %@", error];
+        NSLog(@"%@", jsonString);
+    } else {
+        jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+    }
+    return jsonString;
 }
 
 @end
