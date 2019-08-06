@@ -3,8 +3,12 @@ function StreamingPlayer() {
 }
 
 StreamingPlayer.prototype.play = function (url, options) {
+    var _url = url;
 	options = options || {};
-	cordova.exec(options.successCallback || null, options.errorCallback || null, "StreamingPlayer", "play", [url, options]);
+    if( Object.prototype.toString.call( url ) === '[object Array]' ) {
+        _url = url.join('|');
+    }
+	cordova.exec(options.successCallback || null, options.errorCallback || null, "StreamingPlayer", "play", [_url, options]);
 };
 
 StreamingPlayer.prototype.pause = function(win, fail) {

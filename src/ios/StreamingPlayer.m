@@ -7,8 +7,14 @@
 #import "AVQueuePlayerPrevious.h"
 
 @interface StreamingPlayer()
-- (void)parseOptions:(NSDictionary *) options type:(NSString *) type;
-- (void)play:(CDVInvokedUrlCommand *) command type:(NSString *) type;
+- (void)play:(CDVInvokedUrlCommand *) command;
+- (void)pause:(CDVInvokedUrlCommand *) command;
+- (void)close:(CDVInvokedUrlCommand *) command;
+- (void)nextTrack:(CDVInvokedUrlCommand *) command;
+- (void)prevTrack:(CDVInvokedUrlCommand *) command;
+- (void)playTrackId:(CDVInvokedUrlCommand *) command;
+
+- (void)parseOptions:(NSDictionary *) options;
 - (void)startPlayer:(NSString*)uri;
 - (void)moviePlayBackDidFinish:(NSNotification*)notification;
 - (void)timerTick:(NSTimer*)timer;
@@ -29,24 +35,6 @@
     NSTimer *timer;
 }
 
--(void)parseOptions:(NSDictionary *)options type:(NSString *) type {
-    // Common options
-    mOrientation = options[@"orientation"] ?: @"default";
-    
-    if (![options isKindOfClass:[NSNull class]] && [options objectForKey:@"shouldAutoClose"]) {
-        shouldAutoClose = [[options objectForKey:@"shouldAutoClose"] boolValue];
-    } else {
-        shouldAutoClose = YES;
-    }
-    
-    if (![options isKindOfClass:[NSNull class]] && [options objectForKey:@"initFullscreen"]) {
-        initFullscreen = [[options objectForKey:@"initFullscreen"] boolValue];
-    } else {
-        initFullscreen = YES;
-    }
-    
-}
-
 -(void)play:(CDVInvokedUrlCommand *) command {
     NSLog(@"play called");
     callbackId = command.callbackId;
@@ -63,6 +51,24 @@
     if (moviePlayer.player) {
         [moviePlayer.player pause];
     }
+}
+
+-(void)parseOptions:(NSDictionary *)options type:(NSString *) type {
+    // Common options
+    mOrientation = options[@"orientation"] ?: @"default";
+    
+    if (![options isKindOfClass:[NSNull class]] && [options objectForKey:@"shouldAutoClose"]) {
+        shouldAutoClose = [[options objectForKey:@"shouldAutoClose"] boolValue];
+    } else {
+        shouldAutoClose = YES;
+    }
+    
+    if (![options isKindOfClass:[NSNull class]] && [options objectForKey:@"initFullscreen"]) {
+        initFullscreen = [[options objectForKey:@"initFullscreen"] boolValue];
+    } else {
+        initFullscreen = YES;
+    }
+    
 }
 
 -(void)startPlayer:(NSString*)uri {
@@ -196,14 +202,18 @@
 - (void) respondToSwipeGesture:(UISwipeGestureRecognizer *)sender {
     if ( sender.direction == UISwipeGestureRecognizerDirectionLeft ){
         NSLog(@" *** SWIPE LEFT ***");
-        [movie advanceToNextItem];
-        if([movie isAtEnd]) {
-            [self sendResult:@""];
+        if(![movie isAtEnd]) {
+            [movie advanceToNextItem];
+            if([movie isAtEnd]) {
+                [self sendResult:@""];
+            }
         }
     }
     if ( sender.direction == UISwipeGestureRecognizerDirectionRight ){
         NSLog(@" *** SWIPE RIGHT ***");
-        [movie playPreviousItem];
+        if(![movie isAtBeginning]) {
+            [movie playPreviousItem];
+        }
     }
     if ( sender.direction== UISwipeGestureRecognizerDirectionUp ){
         NSLog(@" *** SWIPE UP ***");
@@ -308,4 +318,20 @@
         timer = nil;
     }
 }
+
+-(void) fireEvent:(NSString *) name data:(NSDictionary *) data {
+    NSLog(@"firing event %@ with data %@", name, data);
+    NSDictionary *dictionary = @{
+        @"test" : @"test",
+    };
+
+    NSString *function = [NSString stringWithFormat:@"cordova.fireDocumentEvent('%@', '%@')", name, data];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([[self webView] isKindOfClass:WKWebView.class])
+          [(WKWebView*)[self webView] evaluateJavaScript:function completionHandler:^(id result, NSError *error) {}];
+        else
+          [(UIWebView*)[self webView] stringByEvaluatingJavaScriptFromString: function];
+    });
+}
+
 @end
