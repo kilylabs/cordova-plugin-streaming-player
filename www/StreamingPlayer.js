@@ -47,8 +47,8 @@ StreamingPlayer.install = function () {
 	if (!window.plugins) {
 		window.plugins = {};
 	}
-	window.plugins.streamingPlayer = new StreamingPlayer();
-	return window.plugins.streamingPlayer;
+	window.plugins.StreamingPlayer = new StreamingPlayer();
+	return window.plugins.StreamingPlayer;
 };
 
 cordova.addConstructor(StreamingPlayer.install);

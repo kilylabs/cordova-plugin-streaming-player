@@ -15,9 +15,6 @@
 - (void)respondToSwipeGesture:(UISwipeGestureRecognizer *)sender;
 - (void)sendResult:(NSString*)errorMsg;
 - (void)cleanup;
-- (void)setBackgroundColor:(NSString *)color;
-- (void)setImage:(NSString*)imagePath withScaleType:(NSString*)imageScaleType;
-- (UIImage*)getImage: (NSString *)imageName;
 @end
 
 @implementation StreamingPlayer {
@@ -56,7 +53,7 @@
 
     [self ignoreMute];
     NSString *mediaUrl  = [command.arguments objectAtIndex:0];
-    [self parseOptions:[command.arguments objectAtIndex:1] type:type];
+    [self parseOptions:[command.arguments objectAtIndex:1]];
     [self startPlayer:mediaUrl];
 }
 
@@ -156,8 +153,6 @@
     AVAudioSession *session = [AVAudioSession sharedInstance];
     [session setCategory:AVAudioSessionCategoryPlayback error:nil];
 }
-
-- (void)orientationChanged:(NSNotification *)notification {
 
 - (void) handleGestures {
     // Get buried nested view

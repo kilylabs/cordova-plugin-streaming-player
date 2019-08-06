@@ -6,7 +6,10 @@
 @interface StreamingPlayer : CDVPlugin
 @property (nonatomic, strong) AVAudioSession* avSession;
 
-- (void)playVideo:(CDVInvokedUrlCommand*)command;
-- (void)playAudio:(CDVInvokedUrlCommand*)command;
+- (void)play:(CDVInvokedUrlCommand*)command;
+- (void)pause:(CDVInvokedUrlCommand*)command;
+- (void)nextTrack:(CDVInvokedUrlCommand*)command;
+- (void)prevTrack:(CDVInvokedUrlCommand*)command;
+- (void)playTrackId:(CDVInvokedUrlCommand*)command;
 
 @end
