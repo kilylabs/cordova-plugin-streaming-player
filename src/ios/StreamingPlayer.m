@@ -20,6 +20,8 @@
 - (void)timerTick:(NSTimer*)timer;
 - (void)respondToSwipeGesture:(UISwipeGestureRecognizer *)sender;
 - (void)sendResult:(NSString*)errorMsg;
+- (void)next;
+- (void)prev;
 - (void)cleanup;
 @end
 
@@ -51,7 +53,49 @@
     }
 }
 
--(void)parseOptions:(NSDictionary *)options type:(NSString *) type {
+-(void)close:(CDVInvokedUrlCommand *) command {
+    NSLog(@"close called");
+    callbackId = command.callbackId;
+    [self cleanup];
+}
+
+-(void)nextTrack:(CDVInvokedUrlCommand *) command {
+    NSLog(@"close called");
+    callbackId = command.callbackId;
+    [self next];
+}
+
+-(void)prevTrack:(CDVInvokedUrlCommand *) command {
+    NSLog(@"close called");
+    callbackId = command.callbackId;
+    [self prev];
+}
+
+-(void)playTrackId:(CDVInvokedUrlCommand *) command {
+    NSLog(@"close called");
+    callbackId = command.callbackId;
+    int idx  = [command.arguments objectAtIndex:0];
+    if (movie) {
+        [movie playItemIdx:idx];
+    }
+}
+
+
+
+-(void) next{
+    if(![movie isAtEnd]) {
+        [movie advanceToNextItem];
+    }
+}
+
+-(void) prev{
+    if(![movie isAtBeginning]) {
+        [movie playPreviousItem];
+    }
+}
+
+
+-(void)parseOptions:(NSDictionary *)options {
     // Common options
     mOrientation = options[@"orientation"] ?: @"default";
     
@@ -128,12 +172,6 @@
                                                  name:AVPlayerItemFailedToPlayToEndTimeNotification
                                                object:moviePlayer.player.currentItem];
     
-    // Listen for orientation change
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(orientationChanged:)
-                                                 name:UIDeviceOrientationDidChangeNotification
-                                               object:nil];
-    
     /* Listen for click on the "Done" button
      
      // Deprecated.. AVPlayerController doesn't offer a "Done" listener... thanks apple. We'll listen for an error when playback finishes
@@ -200,18 +238,11 @@
 - (void) respondToSwipeGesture:(UISwipeGestureRecognizer *)sender {
     if ( sender.direction == UISwipeGestureRecognizerDirectionLeft ){
         NSLog(@" *** SWIPE LEFT ***");
-        if(![movie isAtEnd]) {
-            [movie advanceToNextItem];
-            if([movie isAtEnd]) {
-                [self sendResult:@""];
-            }
-        }
+        [self next];
     }
     if ( sender.direction == UISwipeGestureRecognizerDirectionRight ){
         NSLog(@" *** SWIPE RIGHT ***");
-        if(![movie isAtBeginning]) {
-            [movie playPreviousItem];
-        }
+        [self prev];
     }
     if ( sender.direction== UISwipeGestureRecognizerDirectionUp ){
         NSLog(@" *** SWIPE UP ***");
@@ -286,7 +317,6 @@
 - (void)cleanup {
     NSLog(@"Clean up called");
     initFullscreen = false;
-    backgroundColor = nil;
     
     // Remove playback finished listener
     [[NSNotificationCenter defaultCenter]

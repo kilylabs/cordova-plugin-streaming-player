@@ -178,4 +178,15 @@
     }
 }
 
+-(void)playItemIdx:(int)idx {
+    if(idx == 0) {
+        nowPlayingIndex = 1;
+        [self playPreviousItem];
+    } else {
+        nowPlayingIndex = idx - 1;
+        [self advanceToNextItem];
+    }
+    
+}
+
 @end
