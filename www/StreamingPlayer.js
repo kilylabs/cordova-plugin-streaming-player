@@ -1,35 +1,6 @@
 "use strict";
 function StreamingPlayer() {
 
-    var _eventHandlers = {};
-
-    this.addListener = function(name,callback) {
-        if(!_eventHandlers[name]) {
-            _eventHandlers[name] = [];
-        }
-        _eventHandlers[name].push(callback);
-        document.addEventListener(name,callback,false);
-    };
-
-    this.removeListener = function(name,callback) {
-        if(_eventHandlers[name] && _eventHandlers[name].length) {
-            _eventHandlers[name].forEach(function(v,k){
-                if(callback === v) {
-                    _eventHandlers[name].splice(k,1);
-                }
-            });
-        }
-        document.removeEventListener(name,callback);
-    }
-
-    this.removeListeners = function(name) {
-        if(_eventHandlers[name] && _eventHandlers[name].length) {
-            _eventHandlers[name].forEach(function(v,k){
-                this.removeListener(name,v);
-            });
-        }
-    }
-
 }
 
 StreamingPlayer.prototype.play = function (url, options) {
@@ -89,6 +60,8 @@ StreamingPlayer.prototype.playTrackId = function(idx, win, fail) {
     cordova.exec(win, fail, "StreamingPlayer", "playTrackId", [idx]);
 };
 
+StreamingPlayer.prototype._eventHandlers = {};
+
 StreamingPlayer.prototype.clearListeners = function() {
     [
         "streamingplayer:play",
@@ -102,6 +75,33 @@ StreamingPlayer.prototype.clearListeners = function() {
         this.removeListeners(v);
     });
 };
+
+StreamingPlayer.prototype.addListener = function(name,callback) {
+    if(!this._eventHandlers[name]) {
+        this._eventHandlers[name] = [];
+    }
+    this._eventHandlers[name].push(callback);
+    document.addEventListener(name,callback,false);
+};
+
+StreamingPlayer.prototype.removeListener = function(name,callback) {
+    if(this._eventHandlers[name] && this._eventHandlers[name].length) {
+        this._eventHandlers[name].forEach(function(v,k){
+            if(callback === v) {
+                this._eventHandlers[name].splice(k,1);
+            }
+        });
+    }
+    document.removeEventListener(name,callback);
+}
+
+StreamingPlayer.prototype.removeListeners = function(name) {
+    if(this._eventHandlers[name] && this._eventHandlers[name].length) {
+        this._eventHandlers[name].forEach(function(v,k){
+            this.removeListener(name,v);
+        });
+    }
+}
 
 StreamingPlayer.install = function () {
 	if (!window.plugins) {

@@ -377,7 +377,13 @@
     //NSLog(@"Checking for is closed");
     if (moviePlayer.player.rate == 0 &&
         (moviePlayer.isBeingDismissed || moviePlayer.nextResponder == nil)) {
-            [self sendResult:@""];
+        NSLog(@"Close button clicked");
+        [self cleanup];
+        [self
+         fireEvent:@"streamingplayer:close"
+         data:@{
+                }];
+        
     }
 }
 
@@ -409,7 +415,7 @@
     }
     
     if(timer) {
-        [timer invalidate];
+        [timer  invalidate];
         timer = nil;
     }
 }
@@ -417,7 +423,7 @@
 -(void) fireEvent:(NSString *) name data:(NSDictionary *) data {
     NSLog(@"firing event %@ with data %@", name, data);
 
-    NSString *function = [NSString stringWithFormat:@"cordova.fireDocumentEvent('%@', '%@')", name, data];
+    NSString *function = [NSString stringWithFormat:@"cordova.fireDocumentEvent('%@', %s)", name, [[self toJSONString:data] UTF8String]];
     dispatch_async(dispatch_get_main_queue(), ^{
         if ([[self webView] isKindOfClass:WKWebView.class])
           [(WKWebView*)[self webView] evaluateJavaScript:function completionHandler:^(id result, NSError *error) {}];
