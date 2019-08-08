@@ -23,6 +23,7 @@
 - (void)next;
 - (void)prev;
 - (void)cleanup;
+- (void)fireEvent:(NSString *) name data:(NSDictionary *)data;
 @end
 
 @implementation StreamingPlayer {
@@ -43,6 +44,7 @@
     NSString *mediaUrl  = [command.arguments objectAtIndex:0];
     [self parseOptions:[command.arguments objectAtIndex:1]];
     [self startPlayer:mediaUrl];
+    [self sendResult:@""];
 }
 
 -(void)pause:(CDVInvokedUrlCommand *) command {
@@ -50,47 +52,70 @@
     callbackId = command.callbackId;
     if (moviePlayer.player) {
         [moviePlayer.player pause];
+        int index = [movie getIndex];
+        [self
+         fireEvent:@"streamingplayer:pause"
+         data:@{
+                @"index" : [NSNumber numberWithInt:index]
+                }];
     }
+    [self sendResult:@""];
 }
 
 -(void)close:(CDVInvokedUrlCommand *) command {
     NSLog(@"close called");
     callbackId = command.callbackId;
     [self cleanup];
+    [self sendResult:@""];
 }
 
 -(void)nextTrack:(CDVInvokedUrlCommand *) command {
-    NSLog(@"close called");
+    NSLog(@"nextTrack called");
     callbackId = command.callbackId;
     [self next];
+    [self sendResult:@""];
 }
 
 -(void)prevTrack:(CDVInvokedUrlCommand *) command {
-    NSLog(@"close called");
+    NSLog(@"prevTrack called");
     callbackId = command.callbackId;
     [self prev];
+    [self sendResult:@""];
 }
 
 -(void)playTrackId:(CDVInvokedUrlCommand *) command {
-    NSLog(@"close called");
+    int idx  = [[command.arguments objectAtIndex:0] intValue];
+    NSLog(@"playTrackId called, idx is %d",idx);
     callbackId = command.callbackId;
-    int idx  = [command.arguments objectAtIndex:0];
     if (movie) {
         [movie playItemIdx:idx];
     }
+    [self sendResult:@""];
 }
-
-
 
 -(void) next{
     if(![movie isAtEnd]) {
         [movie advanceToNextItem];
+        int index = [movie getIndex];
+        [self
+         fireEvent:@"streamingplayer:trackChange"
+         data:@{
+                @"index" : [NSNumber numberWithInt:index],
+                @"direction" : @1,
+         }];
     }
 }
 
 -(void) prev{
     if(![movie isAtBeginning]) {
         [movie playPreviousItem];
+        int index = [movie getIndex];
+        [self
+         fireEvent:@"streamingplayer:trackChange"
+         data:@{
+                @"index" : [NSNumber numberWithInt:index],
+                @"direction" : @0,
+         }];
     }
 }
 
@@ -159,7 +184,12 @@
                                              selector:@selector(appDidEnterBackground:)
                                                  name:UIApplicationDidEnterBackgroundNotification
                                                object:nil];
-    
+    // Listen for status change
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(appMovieStatusChange:)
+                                                 name:@"AVPlayerStatusChangeNotification"
+                                               object:moviePlayer.player.currentItem];
+
     // Listen for playback finishing
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(moviePlayBackDidFinish:)
@@ -171,6 +201,9 @@
                                              selector:@selector(moviePlayBackDidFinish:)
                                                  name:AVPlayerItemFailedToPlayToEndTimeNotification
                                                object:moviePlayer.player.currentItem];
+    
+    [movie addObserver:self forKeyPath:@"status" options:0 context:nil];
+
     
     /* Listen for click on the "Done" button
      
@@ -189,6 +222,13 @@
 
 }
 
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    if (object == movie && [keyPath isEqualToString:@"status"]) {
+        [[NSNotificationCenter defaultCenter]
+         postNotificationName:@"AVPlayerStatusChangeNotification"
+         object:movie.currentItem];
+    }
+}
 
 // Ignore the mute button
 -(void)ignoreMute {
@@ -273,8 +313,37 @@
     NSLog(@"appDidBecomeActive");
 }
 
+- (void)appMovieStatusChange:(NSNotification*)notification {
+    NSLog(@"appStatusChange %@", notification.userInfo);
+    
+    int index = [movie getIndex];
+    NSString* status = [NSString stringWithFormat:@"%ld",(long)movie.currentItem.status];
+    [self
+     fireEvent:@"streamingplayer:trackStatusChange"
+     data:@{
+            @"index" : [NSNumber numberWithInt:index],
+            @"status" : status,
+            }];
+    if(AVPlayerStatusReadyToPlay == movie.currentItem.status) {
+        [self
+         fireEvent:@"streamingplayer:play"
+         data:@{
+                @"index" : [NSNumber numberWithInt:index]
+                }];
+    }
+}
+
 - (void) moviePlayBackDidFinish:(NSNotification*)notification {
-    NSLog(@"Playback did finish with auto close being %d, and error message being %@", shouldAutoClose, notification.userInfo);
+    NSLog(@"Playback did finish with error message being %@", notification.userInfo);
+    int index = [movie getIndex];
+
+    [self
+     fireEvent:@"streamingplayer:trackEnd"
+     data:@{
+            @"index" : [NSNumber numberWithInt:index],
+            @"direction" : @0,
+    }];
+    
     NSDictionary *notificationUserInfo = [notification userInfo];
     NSNumber *errorValue = [notificationUserInfo objectForKey:AVPlayerItemFailedToPlayToEndTimeErrorKey];
     NSString *errorMsg;
@@ -293,7 +362,6 @@
 
 - (void) sendResult:(NSString*)errorMsg {
 //    if (false || [errorMsg length] != 0) {
-        [self cleanup];
         CDVPluginResult* pluginResult;
         if ([errorMsg length] != 0) {
             pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMsg];
