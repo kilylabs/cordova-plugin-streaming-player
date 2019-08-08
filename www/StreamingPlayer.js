@@ -63,6 +63,7 @@ StreamingPlayer.prototype.playTrackId = function(idx, win, fail) {
 StreamingPlayer.prototype._eventHandlers = {};
 
 StreamingPlayer.prototype.clearListeners = function() {
+    var that = this;
     [
         "streamingplayer:play",
         "streamingplayer:pause",
@@ -72,7 +73,7 @@ StreamingPlayer.prototype.clearListeners = function() {
         "streamingplayer:trackEnd",
         "streamingplayer:trackChange",
     ].forEach(function(v){
-        this.removeListeners(v);
+        that.removeListeners(v);
     });
 };
 
@@ -96,9 +97,10 @@ StreamingPlayer.prototype.removeListener = function(name,callback) {
 }
 
 StreamingPlayer.prototype.removeListeners = function(name) {
+    var that = this;
     if(this._eventHandlers[name] && this._eventHandlers[name].length) {
         this._eventHandlers[name].forEach(function(v,k){
-            this.removeListener(name,v);
+            that.removeListener(name,v);
         });
     }
 }
