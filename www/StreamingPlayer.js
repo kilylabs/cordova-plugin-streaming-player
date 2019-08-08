@@ -1,5 +1,35 @@
 "use strict";
 function StreamingPlayer() {
+
+    var _eventHandlers = {};
+
+    this.addListener = function(name,callback) {
+        if(!_eventHandlers[name]) {
+            _eventHandlers[name] = [];
+        }
+        _eventHandlers[name].push(callback);
+        document.addEventListener(name,callback,false);
+    };
+
+    this.removeListener = function(name,callback) {
+        if(_eventHandlers[name] && _eventHandlers[name].length) {
+            _eventHandlers[name].forEach(function(v,k){
+                if(callback === v) {
+                    _eventHandlers[name].splice(k,1);
+                }
+            });
+        }
+        document.removeEventListener(name,callback);
+    }
+
+    this.removeListeners = function(name) {
+        if(_eventHandlers[name] && _eventHandlers[name].length) {
+            _eventHandlers[name].forEach(function(v,k){
+                this.removeListener(name,v);
+            });
+        }
+    }
+
 }
 
 StreamingPlayer.prototype.play = function (url, options) {
@@ -20,19 +50,31 @@ StreamingPlayer.prototype.close = function(win, fail) {
 };
 
 StreamingPlayer.prototype.onPlay = function(callback) {
-    document.addEventListener("streamingplayer:play", callback, false);
+    this.addListener("streamingplayer:play", callback, false);
 };
 
 StreamingPlayer.prototype.onPause = function(callback) {
-    document.addEventListener("streamingplayer:pause", callback, false);
+    this.addListener("streamingplayer:pause", callback, false);
+};
+
+StreamingPlayer.prototype.onClose = function(callback) {
+    this.addListener("streamingplayer:close", callback, false);
+};
+
+StreamingPlayer.prototype.onTrackStatusChange = function(callback) {
+    this.addListener("streamingplayer:trackStatusChange", callback, false);
 };
 
 StreamingPlayer.prototype.onTrackStart = function(callback) {
-    document.addEventListener("streamingplayer:trackStart", callback, false);
+    this.addListener("streamingplayer:trackStart", callback, false);
 };
 
 StreamingPlayer.prototype.onTrackEnd = function(callback) {
-    document.addEventListener("streamingplayer:trackEnd", callback, false);
+    this.addListener("streamingplayer:trackEnd", callback, false);
+};
+
+StreamingPlayer.prototype.onTrackChange = function(callback) {
+    this.addListener("streamingplayer:trackChange", callback, false);
 };
 
 StreamingPlayer.prototype.nextTrack = function(win, fail) {
@@ -47,6 +89,20 @@ StreamingPlayer.prototype.playTrackId = function(idx, win, fail) {
     cordova.exec(win, fail, "StreamingPlayer", "playTrackId", [idx]);
 };
 
+StreamingPlayer.prototype.clearListeners = function() {
+    [
+        "streamingplayer:play",
+        "streamingplayer:pause",
+        "streamingplayer:close",
+        "streamingplayer:trackStatusChange",
+        "streamingplayer:trackStart",
+        "streamingplayer:trackEnd",
+        "streamingplayer:trackChange",
+    ].forEach(function(v){
+        this.removeListeners(v);
+    });
+};
+
 StreamingPlayer.install = function () {
 	if (!window.plugins) {
 		window.plugins = {};
@@ -57,8 +113,6 @@ StreamingPlayer.install = function () {
 
 cordova.addConstructor(StreamingPlayer.install);
 
-// This channel receives nfcEvent data from native code
-// and fires JavaScript events.
 require('cordova/channel').onCordovaReady.subscribe(function() {
     function success(message) {
         if (!message.type) {
