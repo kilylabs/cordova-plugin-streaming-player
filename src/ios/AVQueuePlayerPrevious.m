@@ -86,6 +86,10 @@
         // Not a typo; see above comment
         [self seekToTime:kCMTimeZero toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
         [self play];
+        [[NSNotificationCenter defaultCenter]
+         postNotificationName:@"AVPlayerPrevItem"
+         object:self.currentItem];
+
     }
 }
 
@@ -152,10 +156,17 @@
 {
     // The only addition this method makes to AVQueuePlayer is advancing the nowPlayingIndex by 1.
     [super advanceToNextItem];
-    if (nowPlayingIndex < [_itemsForPlayer count] - 1){
+    if (nowPlayingIndex < [_itemsForPlayer count] - 1) {
         nowPlayingIndex++;
     }
+    [[NSNotificationCenter defaultCenter]
+     postNotificationName:@"AVPlayerNextItem"
+     object:self.currentItem];
+
 }
+
+					
+
 -(void)insertItem:(AVPlayerItem *)item afterItem:(AVPlayerItem *)afterItem
 {
     // This method calls the superclass to add the new item to the AVQueuePlayer, then adds that item to the

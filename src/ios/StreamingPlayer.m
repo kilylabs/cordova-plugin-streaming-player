@@ -34,6 +34,8 @@
     NSString *mOrientation;
     AVQueuePlayerPrevious *movie;
     NSTimer *timer;
+    NSMutableArray *items;
+    NSMutableDictionary<NSNumber*,NSNumber*> *state;
 }
 
 -(void)play:(CDVInvokedUrlCommand *) command {
@@ -51,13 +53,18 @@
     NSLog(@"pause called");
     callbackId = command.callbackId;
     if (moviePlayer.player) {
-        [moviePlayer.player pause];
         int index = [movie getIndex];
-        [self
-         fireEvent:@"streamingplayer:pause"
-         data:@{
-                @"index" : [NSNumber numberWithInt:index]
+
+        [moviePlayer.player pause];
+
+        if(state[@(index)] != AVPlayerTimeControlStatusPaused) {
+            state[@(index)] = @(AVPlayerTimeControlStatusPaused);
+            [self
+             fireEvent:@"streamingplayer:pause"
+             data:@{
+                    @"index" : [NSNumber numberWithInt:index]
                 }];
+        }
     }
     [self sendResult:@""];
 }
@@ -96,26 +103,12 @@
 -(void) next{
     if(![movie isAtEnd]) {
         [movie advanceToNextItem];
-        int index = [movie getIndex];
-        [self
-         fireEvent:@"streamingplayer:trackChange"
-         data:@{
-                @"index" : [NSNumber numberWithInt:index],
-                @"direction" : @1,
-         }];
     }
 }
 
 -(void) prev{
     if(![movie isAtBeginning]) {
         [movie playPreviousItem];
-        int index = [movie getIndex];
-        [self
-         fireEvent:@"streamingplayer:trackChange"
-         data:@{
-                @"index" : [NSNumber numberWithInt:index],
-                @"direction" : @0,
-         }];
     }
 }
 
@@ -142,7 +135,7 @@
     NSLog(@"startplayer called");
     
     NSArray *urls = [uri componentsSeparatedByString:@"|"];   //take the one array for split the string
-    NSMutableArray *items = [NSMutableArray new];
+    items = [NSMutableArray new];
     
     int i;
     int count;
@@ -160,18 +153,22 @@
     [moviePlayer setShowsPlaybackControls:YES];
     [moviePlayer setUpdatesNowPlayingInfoCenter:YES];
     
+    state = [NSMutableDictionary dictionary];
+    
     if(@available(iOS 11.0, *)) { [moviePlayer setEntersFullScreenWhenPlaybackBegins:YES]; }
+    
+    // setup listners
+    [self handleBaseListeners];
+    [self handleItemListeners: NO];
     
     // present modally so we get a close button
     [self.viewController presentViewController:moviePlayer animated:YES completion:^(void){
         [self->moviePlayer.player play];
     }];
     
-    // setup listners
-    [self handleListeners];
 }
 
-- (void) handleListeners {
+- (void) handleBaseListeners {
     
     // Listen for re-maximize
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -184,26 +181,89 @@
                                              selector:@selector(appDidEnterBackground:)
                                                  name:UIApplicationDidEnterBackgroundNotification
                                                object:nil];
-    // Listen for status change
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(appMovieStatusChange:)
-                                                 name:@"AVPlayerStatusChangeNotification"
-                                               object:moviePlayer.player.currentItem];
-
-    // Listen for playback finishing
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(moviePlayBackDidFinish:)
-                                                 name:AVPlayerItemDidPlayToEndTimeNotification
-                                               object:moviePlayer.player.currentItem];
     
-    // Listen for errors
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(moviePlayBackDidFinish:)
-                                                 name:AVPlayerItemFailedToPlayToEndTimeNotification
-                                               object:moviePlayer.player.currentItem];
+    timer = [NSTimer scheduledTimerWithTimeInterval:0.2
+                                             target:self
+                                           selector:@selector(timerTick:)
+                                           userInfo:nil
+                                            repeats:YES];
     
-    [movie addObserver:self forKeyPath:@"status" options:0 context:nil];
 
+
+}
+
+- (void) handleItemListeners: (bool)remove {
+    for (int songPointer = 0; songPointer < [items count]; songPointer++) {
+
+        if(remove) {
+            // Remove playback finished listener
+            [[NSNotificationCenter defaultCenter]
+             removeObserver:self
+             name:AVPlayerItemDidPlayToEndTimeNotification
+             object:[items objectAtIndex:songPointer]];
+            
+            // Remove playback finished error listener
+            [[NSNotificationCenter defaultCenter]
+             removeObserver:self
+             name:AVPlayerItemFailedToPlayToEndTimeNotification
+             object:[items objectAtIndex:songPointer]];
+            
+            // Listen for status change
+            [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                         name:@"AVPlayerNextItem"
+                                                       object:[items objectAtIndex:songPointer]];
+
+            // Listen for status change
+            [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                            name:@"AVPlayerPrevItem"
+                                                          object:[items objectAtIndex:songPointer]];
+
+            // Remove orientation change listener
+            [[NSNotificationCenter defaultCenter]
+             removeObserver:self
+             name:UIDeviceOrientationDidChangeNotification
+             object:nil];
+
+            // Remove status change listener
+            [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                         name:@"AVPlayerStatusChangeNotification"
+                                                       object:movie];
+            
+            [movie addObserver:self forKeyPath:@"status" options:0 context:nil];
+        } else {
+
+            // Listen for playback finishing
+            [[NSNotificationCenter defaultCenter] addObserver:self
+                                                     selector:@selector(moviePlayBackDidFinish:)
+                                                         name:AVPlayerItemDidPlayToEndTimeNotification
+                                                       object:[items objectAtIndex:songPointer]];
+            
+            // Listen for errors
+            [[NSNotificationCenter defaultCenter] addObserver:self
+                                                     selector:@selector(moviePlayBackDidFinish:)
+                                                         name:AVPlayerItemFailedToPlayToEndTimeNotification
+                                                       object:[items objectAtIndex:songPointer]];
+            
+            // Listen for status change
+            [[NSNotificationCenter defaultCenter] addObserver:self
+                                                     selector:@selector(appMovieStatusChange:)
+                                                         name:@"AVPlayerStatusChangeNotification"
+                                                       object:[items objectAtIndex:songPointer]];
+            // Listen for status change
+            [[NSNotificationCenter defaultCenter] addObserver:self
+                                                     selector:@selector(onNextTrack:)
+                                                         name:@"AVPlayerNextItem"
+                                                       object:[items objectAtIndex:songPointer]];
+            // Listen for status change
+            [[NSNotificationCenter defaultCenter] addObserver:self
+                                                     selector:@selector(onPrevTrack:)
+                                                         name:@"AVPlayerPrevItem"
+                                                       object:[items objectAtIndex:songPointer]];
+
+            [[items objectAtIndex:songPointer] addObserver:self forKeyPath:@"status" options:0 context:nil];
+            
+        }
+    }
     
     /* Listen for click on the "Done" button
      
@@ -214,19 +274,14 @@
      object:nil];
      */
 
-    timer = [NSTimer scheduledTimerWithTimeInterval:0.2
-                                     target:self
-                                   selector:@selector(timerTick:)
-                                   userInfo:nil
-                                    repeats:YES];
 
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
-    if (object == movie && [keyPath isEqualToString:@"status"]) {
+    if (object == movie.currentItem && [keyPath isEqualToString:@"status"]) {
         [[NSNotificationCenter defaultCenter]
          postNotificationName:@"AVPlayerStatusChangeNotification"
-         object:movie.currentItem];
+         object:object];
     }
 }
 
@@ -313,6 +368,28 @@
     NSLog(@"appDidBecomeActive");
 }
 
+- (void) onNextTrack:(NSNotification*)notification {
+    NSLog(@"appDidBecomeActive");
+    int index = [movie getIndex];
+    [self
+     fireEvent:@"streamingplayer:trackChange"
+     data:@{
+            @"index" : [NSNumber numberWithInt:index],
+            @"direction" : @1,
+            }];
+}
+
+- (void) onPrevTrack:(NSNotification*)notification {
+    NSLog(@"appDidBecomeActive");
+    int index = [movie getIndex];
+    [self
+     fireEvent:@"streamingplayer:trackChange"
+     data:@{
+            @"index" : [NSNumber numberWithInt:index],
+            @"direction" : @0,
+            }];
+}
+
 - (void)appMovieStatusChange:(NSNotification*)notification {
     NSLog(@"appStatusChange %@", notification.userInfo);
     
@@ -324,7 +401,9 @@
             @"index" : [NSNumber numberWithInt:index],
             @"status" : status,
             }];
-    if(AVPlayerStatusReadyToPlay == movie.currentItem.status) {
+    if( (AVPlayerItemStatusReadyToPlay == movie.currentItem.status) ) {
+        state[@(index)] = @(AVPlayerTimeControlStatusPlaying);
+        
         [self
          fireEvent:@"streamingplayer:play"
          data:@{
@@ -336,14 +415,32 @@
 - (void) moviePlayBackDidFinish:(NSNotification*)notification {
     NSLog(@"Playback did finish with error message being %@", notification.userInfo);
     int index = [movie getIndex];
-
+    if(index > 0) {
+        index--;
+    }
     [self
      fireEvent:@"streamingplayer:trackEnd"
      data:@{
             @"index" : [NSNumber numberWithInt:index],
-            @"direction" : @0,
     }];
-    
+    if(![movie isAtEnd]) {
+        int index = [movie getIndex];
+        [self
+         fireEvent:@"streamingplayer:trackChange"
+         data:@{
+                @"index" : [NSNumber numberWithInt:index],
+                @"direction" : @1,
+                }];
+    } else {
+        int index = [movie getIndex];
+        [self
+         fireEvent:@"streamingplayer:end"
+         data:@{
+                @"index" : [NSNumber numberWithInt:index],
+                }];
+
+    }
+    /*
     NSDictionary *notificationUserInfo = [notification userInfo];
     NSNumber *errorValue = [notificationUserInfo objectForKey:AVPlayerItemFailedToPlayToEndTimeErrorKey];
     NSString *errorMsg;
@@ -358,6 +455,7 @@
     }
     
     [self sendResult: errorMsg];
+     */
 }
 
 - (void) sendResult:(NSString*)errorMsg {
@@ -385,6 +483,34 @@
                 }];
         
     }
+    int index = [movie getIndex];
+    NSNumber *timeStatus = @(movie.timeControlStatus);
+    
+    if(movie.timeControlStatus==AVPlayerTimeControlStatusPaused) {
+        NSNumber *item_state = state[@(index)];
+
+        if(item_state != timeStatus) {
+            state[@(index)] = timeStatus;
+
+            [self
+             fireEvent:@"streamingplayer:pause"
+             data:@{
+                    @"index" : [NSNumber numberWithInt:index],
+             }];
+        }
+    } else if(movie.timeControlStatus==AVPlayerTimeControlStatusPlaying) {
+        NSNumber *item_state = state[@(index)];
+
+        if(item_state != timeStatus) {
+            state[@(index)] = timeStatus;
+            [self
+             fireEvent:@"streamingplayer:play"
+             data:@{
+                    @"index" : [NSNumber numberWithInt:index],
+                    }];
+        }
+
+    }
 }
 
 
@@ -392,21 +518,7 @@
     NSLog(@"Clean up called");
     initFullscreen = false;
     
-    // Remove playback finished listener
-    [[NSNotificationCenter defaultCenter]
-     removeObserver:self
-     name:AVPlayerItemDidPlayToEndTimeNotification
-     object:moviePlayer.player.currentItem];
-    // Remove playback finished error listener
-    [[NSNotificationCenter defaultCenter]
-     removeObserver:self
-     name:AVPlayerItemFailedToPlayToEndTimeNotification
-     object:moviePlayer.player.currentItem];
-    // Remove orientation change listener
-    [[NSNotificationCenter defaultCenter]
-     removeObserver:self
-     name:UIDeviceOrientationDidChangeNotification
-     object:nil];
+    [self handleItemListeners: YES];
     
     if (moviePlayer) {
         [moviePlayer.player pause];

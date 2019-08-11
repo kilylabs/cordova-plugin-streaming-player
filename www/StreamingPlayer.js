@@ -48,6 +48,10 @@ StreamingPlayer.prototype.onTrackChange = function(callback) {
     this.addListener("streamingplayer:trackChange", callback, false);
 };
 
+StreamingPlayer.prototype.onEnd = function(callback) {
+    this.addListener("streamingplayer:end", callback, false);
+};
+
 StreamingPlayer.prototype.nextTrack = function(win, fail) {
     cordova.exec(win, fail, "StreamingPlayer", "nextTrack", []);
 };
@@ -86,10 +90,11 @@ StreamingPlayer.prototype.addListener = function(name,callback) {
 };
 
 StreamingPlayer.prototype.removeListener = function(name,callback) {
+    var that = this;
     if(this._eventHandlers[name] && this._eventHandlers[name].length) {
         this._eventHandlers[name].forEach(function(v,k){
             if(callback === v) {
-                this._eventHandlers[name].splice(k,1);
+                that._eventHandlers[name].splice(k,1);
             }
         });
     }
