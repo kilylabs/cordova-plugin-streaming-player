@@ -13,6 +13,8 @@
 - (void)nextTrack:(CDVInvokedUrlCommand *) command;
 - (void)prevTrack:(CDVInvokedUrlCommand *) command;
 - (void)playTrackId:(CDVInvokedUrlCommand *) command;
+- (void)isAtEnd:(CDVInvokedUrlCommand *) command;
+- (void)isAtBeginning:(CDVInvokedUrlCommand *) command;
 
 - (void)parseOptions:(NSDictionary *) options;
 - (void)startPlayer:(NSString*)uri;
@@ -20,6 +22,7 @@
 - (void)timerTick:(NSTimer*)timer;
 - (void)respondToSwipeGesture:(UISwipeGestureRecognizer *)sender;
 - (void)sendResult:(NSString*)errorMsg;
+- (void)sendResult:(NSString*)errorMsg result:(bool)result;
 - (void)next;
 - (void)prev;
 - (void)cleanup;
@@ -72,6 +75,10 @@
 -(void)close:(CDVInvokedUrlCommand *) command {
     NSLog(@"close called");
     callbackId = command.callbackId;
+    [self
+     fireEvent:@"streamingplayer:close"
+     data:@{
+            }];
     [self cleanup];
     [self sendResult:@""];
 }
@@ -98,6 +105,20 @@
         [movie playItemIdx:idx];
     }
     [self sendResult:@""];
+}
+
+-(void)isAtEnd:(CDVInvokedUrlCommand *) command {
+    NSLog(@"isAtEnd called");
+    callbackId = command.callbackId;
+    
+    [self sendResult:@"" result:[movie isAtEnd]];
+}
+
+-(void)isAtBeginning:(CDVInvokedUrlCommand *) command {
+    NSLog(@"isAtBeginning called");
+    callbackId = command.callbackId;
+    
+    [self sendResult:@"" result:[movie isAtBeginning]];
 }
 
 -(void) next{
@@ -459,16 +480,16 @@
 }
 
 - (void) sendResult:(NSString*)errorMsg {
-//    if (false || [errorMsg length] != 0) {
-        CDVPluginResult* pluginResult;
-        if ([errorMsg length] != 0) {
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMsg];
-        } else {
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:true];
-        }
-        NSLog(@"Sending result %@", pluginResult);
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
-//    }
+    [self sendResult:errorMsg result:true];
+}
+
+- (void) sendResult:(NSString*)errorMsg result:(bool)result {
+    //    if (false || [errorMsg length] != 0) {
+    CDVPluginResult* pluginResult;
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsBool:result];
+    NSLog(@"Sending result %@", pluginResult);
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
+    //    }
 }
 
 -(void) timerTick:(NSTimer*)timer {
