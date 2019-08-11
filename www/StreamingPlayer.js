@@ -3,13 +3,13 @@ function StreamingPlayer() {
 
 }
 
-StreamingPlayer.prototype.play = function (url, options) {
+StreamingPlayer.prototype.play = function (win, fail, url, options) {
     var _url = url;
 	options = options || {};
     if( Object.prototype.toString.call( url ) === '[object Array]' ) {
         _url = url.join('|');
     }
-	cordova.exec(options.successCallback || null, options.errorCallback || null, "StreamingPlayer", "play", [_url, options]);
+	cordova.exec(win, fail, "StreamingPlayer", "play", [_url, options]);
 };
 
 StreamingPlayer.prototype.pause = function(win, fail) {
@@ -18,6 +18,26 @@ StreamingPlayer.prototype.pause = function(win, fail) {
 
 StreamingPlayer.prototype.close = function(win, fail) {
     cordova.exec(win, fail, "StreamingPlayer", "close", []);
+};
+
+StreamingPlayer.prototype.isAtEnd = function(win, fail) {
+    cordova.exec(win, fail, "StreamingPlayer", "isAtEnd", []);
+};
+
+StreamingPlayer.prototype.isAtBeginning = function(win, fail) {
+    cordova.exec(win, fail, "StreamingPlayer", "isAtBeginning", []);
+};
+
+StreamingPlayer.prototype.nextTrack = function(win, fail) {
+    cordova.exec(win, fail, "StreamingPlayer", "nextTrack", []);
+};
+
+StreamingPlayer.prototype.prevTrack = function(win, fail) {
+    cordova.exec(win, fail, "StreamingPlayer", "prevTrack", []);
+};
+
+StreamingPlayer.prototype.playTrackId = function(idx, win, fail) {
+    cordova.exec(win, fail, "StreamingPlayer", "playTrackId", [idx]);
 };
 
 StreamingPlayer.prototype.onPlay = function(callback) {
@@ -52,18 +72,6 @@ StreamingPlayer.prototype.onEnd = function(callback) {
     this.addListener("streamingplayer:end", callback, false);
 };
 
-StreamingPlayer.prototype.nextTrack = function(win, fail) {
-    cordova.exec(win, fail, "StreamingPlayer", "nextTrack", []);
-};
-
-StreamingPlayer.prototype.prevTrack = function(win, fail) {
-    cordova.exec(win, fail, "StreamingPlayer", "prevTrack", []);
-};
-
-StreamingPlayer.prototype.playTrackId = function(idx, win, fail) {
-    cordova.exec(win, fail, "StreamingPlayer", "playTrackId", [idx]);
-};
-
 StreamingPlayer.prototype._eventHandlers = {};
 
 StreamingPlayer.prototype.clearListeners = function() {
@@ -76,6 +84,7 @@ StreamingPlayer.prototype.clearListeners = function() {
         "streamingplayer:trackStart",
         "streamingplayer:trackEnd",
         "streamingplayer:trackChange",
+        "streamingplayer:end",
     ].forEach(function(v){
         that.removeListeners(v);
     });
