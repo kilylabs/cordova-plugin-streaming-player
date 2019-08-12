@@ -25,13 +25,15 @@
 
 -(id)initWithItems:(NSArray *)items
 {
+    NSLog(@"initWithItems called: %ld",[items count]);
+    itemsCount = [items count];
     // This function calls the constructor for AVQueuePlayer, then sets up the nowPlayingIndex to 0 and saves the array that the player was generated from as itemsForPlayer
     self = [super initWithItems:items];
     if (self){
         self.itemsForPlayer = [NSMutableArray arrayWithArray:items];
         nowPlayingIndex = 0;
         isCalledFromPlayPreviousItem = NO;
-        for (int songPointer = 0; songPointer < [items count]; songPointer++) {
+        for (int songPointer = 0; songPointer < itemsCount; songPointer++) {
             [[NSNotificationCenter defaultCenter] addObserver:self
                                                      selector:@selector(songEnded:)
                                                          name:AVPlayerItemDidPlayToEndTimeNotification
@@ -56,7 +58,7 @@
     // This method is called by NSNotificationCenter when a song finishes playing; all it does is increment
     // nowPlayingIndex
     [self.delegate queuePlayerDidReceiveNotificationForSongIncrement:self];
-    if (nowPlayingIndex < [_itemsForPlayer count] - 1){
+    if (nowPlayingIndex < itemsCount - 1){
         nowPlayingIndex++;
     }
 }
@@ -98,6 +100,8 @@
     // This function simply returns whether or not the AVQueuePlayerPrevious is at the first song. This is
     // useful for implementing custom behavior if the user tries to play a previous song at the start of
     // the queue (such as restarting the song).
+    NSLog(@"isAtBeginning called: %d:%d",nowPlayingIndex,0);
+
     if (nowPlayingIndex == 0){
         return YES;
     } else {
@@ -110,7 +114,9 @@
     // This function simply returns whether or not the AVQueuePlayerPrevious is at the first song. This is
     // useful for implementing custom behavior if the user tries to play a previous song at the start of
     // the queue (such as restarting the song).
-    if (nowPlayingIndex == [_itemsForPlayer count] - 1){
+    NSLog(@"isAtEnd called: %d:%d",nowPlayingIndex,itemsCount-1);
+    
+    if (nowPlayingIndex == itemsCount - 1){
         return YES;
     } else {
         return NO;
@@ -156,9 +162,10 @@
 {
     // The only addition this method makes to AVQueuePlayer is advancing the nowPlayingIndex by 1.
     [super advanceToNextItem];
-    if (nowPlayingIndex < [_itemsForPlayer count] - 1) {
+    if (nowPlayingIndex < itemsCount - 1) {
         nowPlayingIndex++;
     }
+    
     [[NSNotificationCenter defaultCenter]
      postNotificationName:@"AVPlayerNextItem"
      object:self.currentItem];
@@ -179,7 +186,7 @@
             }
     }
     if ([_itemsForPlayer containsObject:afterItem]){ // AfterItem is non-nil
-        if ([_itemsForPlayer indexOfObject:afterItem] < [_itemsForPlayer count] - 1){
+        if ([_itemsForPlayer indexOfObject:afterItem] < itemsCount - 1){
             [_itemsForPlayer insertObject:item atIndex:[_itemsForPlayer indexOfObject:afterItem] + 1];
         } else {
             [_itemsForPlayer addObject:item];
@@ -190,14 +197,20 @@
 }
 
 -(void)playItemIdx:(int)idx {
-    if(idx == 0) {
-        nowPlayingIndex = 1;
-        [self playPreviousItem];
-    } else {
-        nowPlayingIndex = idx - 1;
-        [self advanceToNextItem];
-    }
+    int diff = idx - nowPlayingIndex;
     
+    if(diff == 0) {
+        
+    } else if(diff > 0) {
+        for (int i = 0; i < diff; i ++) {
+            [self advanceToNextItem];
+        }
+    } else { // diff < 0
+        for (int i = 0; i > diff; i --) {
+            [self playPreviousItem];
+        }
+    }
+
 }
 
 @end

@@ -28,6 +28,7 @@
     
     // Adding previous song functionality requires two new class variables: one array to hold the items that the player has been initialized with (to re-create the player when necessary), and one NSNumber to keep track of which song is currently playing (to determine from where the player should be re-populated
     int nowPlayingIndex;
+    int itemsCount;
 }
 
 @property (nonatomic, weak) id <AVQueuePlayerPreviousDelegate> delegate;

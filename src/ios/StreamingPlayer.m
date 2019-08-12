@@ -39,6 +39,8 @@
     NSTimer *timer;
     NSMutableArray *items;
     NSMutableDictionary<NSNumber*,NSNumber*> *state;
+    int playIndex;
+    BOOL allowSwipe;
 }
 
 -(void)play:(CDVInvokedUrlCommand *) command {
@@ -124,12 +126,14 @@
 -(void) next{
     if(![movie isAtEnd]) {
         [movie advanceToNextItem];
+        allowSwipe = NO;
     }
 }
 
 -(void) prev{
     if(![movie isAtBeginning]) {
         [movie playPreviousItem];
+        allowSwipe = NO;
     }
 }
 
@@ -149,7 +153,15 @@
     } else {
         initFullscreen = YES;
     }
+
+    if (![options isKindOfClass:[NSNull class]] && [options objectForKey:@"playIndex"]) {
+        playIndex = [[options objectForKey:@"playIndex"] intValue];
+    } else {
+        playIndex = 0;
+    }
     
+    allowSwipe = YES;
+
 }
 
 -(void)startPlayer:(NSString*)uri {
@@ -185,6 +197,9 @@
     // present modally so we get a close button
     [self.viewController presentViewController:moviePlayer animated:YES completion:^(void){
         [self->moviePlayer.player play];
+        if(self->playIndex) {
+            [self->movie playItemIdx: self->playIndex];
+        }
     }];
     
 }
@@ -352,21 +367,22 @@
 }
 
 - (void) respondToSwipeGesture:(UISwipeGestureRecognizer *)sender {
-    if ( sender.direction == UISwipeGestureRecognizerDirectionLeft ){
-        NSLog(@" *** SWIPE LEFT ***");
-        [self next];
-    }
-    if ( sender.direction == UISwipeGestureRecognizerDirectionRight ){
-        NSLog(@" *** SWIPE RIGHT ***");
-        [self prev];
-    }
-    if ( sender.direction== UISwipeGestureRecognizerDirectionUp ){
-        NSLog(@" *** SWIPE UP ***");
-        
-    }
-    if ( sender.direction == UISwipeGestureRecognizerDirectionDown ){
-        NSLog(@" *** SWIPE DOWN ***");
-        
+    if(allowSwipe) {
+        if ( sender.direction == UISwipeGestureRecognizerDirectionLeft ){
+            NSLog(@" *** SWIPE LEFT ***");
+            [self next];
+        }
+        if ( sender.direction == UISwipeGestureRecognizerDirectionRight ){
+            NSLog(@" *** SWIPE RIGHT ***");
+            [self prev];
+        }
+        if ( sender.direction== UISwipeGestureRecognizerDirectionUp ){
+            NSLog(@" *** SWIPE UP ***");
+            
+        }
+        if ( sender.direction == UISwipeGestureRecognizerDirectionDown ){
+            NSLog(@" *** SWIPE DOWN ***");
+        }
     }
 }
 
@@ -424,12 +440,13 @@
             }];
     if( (AVPlayerItemStatusReadyToPlay == movie.currentItem.status) ) {
         state[@(index)] = @(AVPlayerTimeControlStatusPlaying);
-        
+        allowSwipe = YES;
         [self
          fireEvent:@"streamingplayer:play"
          data:@{
                 @"index" : [NSNumber numberWithInt:index]
                 }];
+        allowSwipe = YES;
     }
 }
 
