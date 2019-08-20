@@ -111,17 +111,23 @@
 
 -(Boolean)isAtEnd
 {
+    return [self isAtEnd:nowPlayingIndex];
+}
+
+-(Boolean)isAtEnd: (int)idx
+{
     // This function simply returns whether or not the AVQueuePlayerPrevious is at the first song. This is
     // useful for implementing custom behavior if the user tries to play a previous song at the start of
     // the queue (such as restarting the song).
-    NSLog(@"isAtEnd called: %d:%d",nowPlayingIndex,itemsCount-1);
+    NSLog(@"isAtEnd called: %d:%d",idx,itemsCount-1);
     
-    if (nowPlayingIndex == itemsCount - 1){
+    if (idx == itemsCount - 1){
         return YES;
     } else {
         return NO;
     }
 }
+
 
 -(int)getIndex
 {

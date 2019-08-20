@@ -6,6 +6,8 @@
 #import "PortraitVideo.h"
 #import "AVQueuePlayerPrevious.h"
 
+
+
 @interface StreamingPlayer()
 - (void)play:(CDVInvokedUrlCommand *) command;
 - (void)pause:(CDVInvokedUrlCommand *) command;
@@ -41,6 +43,8 @@
     NSMutableDictionary<NSNumber*,NSNumber*> *state;
     int playIndex;
     BOOL allowSwipe;
+    BOOL stopFrameObserve;
+    BOOL lastAgain;
 }
 
 -(void)play:(CDVInvokedUrlCommand *) command {
@@ -77,11 +81,11 @@
 -(void)close:(CDVInvokedUrlCommand *) command {
     NSLog(@"close called");
     callbackId = command.callbackId;
+    [self cleanup];
     [self
      fireEvent:@"streamingplayer:close"
      data:@{
             }];
-    [self cleanup];
     [self sendResult:@""];
 }
 
@@ -126,14 +130,14 @@
 -(void) next{
     if(![movie isAtEnd]) {
         [movie advanceToNextItem];
-        allowSwipe = NO;
+        //allowSwipe = NO;
     }
 }
 
 -(void) prev{
     if(![movie isAtBeginning]) {
         [movie playPreviousItem];
-        allowSwipe = NO;
+        //allowSwipe = NO;
     }
 }
 
@@ -229,6 +233,13 @@
 }
 
 - (void) handleItemListeners: (bool)remove {
+
+    if(remove) {
+        [moviePlayer removeObserver:self forKeyPath:@"view.frame"];
+    } else {
+        [moviePlayer addObserver:self forKeyPath:@"view.frame" options:0 context:nil];
+    }
+    
     for (int songPointer = 0; songPointer < [items count]; songPointer++) {
 
         if(remove) {
@@ -318,6 +329,17 @@
         [[NSNotificationCenter defaultCenter]
          postNotificationName:@"AVPlayerStatusChangeNotification"
          object:object];
+    } else if(!stopFrameObserve && (object == moviePlayer) && [keyPath isEqualToString:@"view.frame"]) {
+        if(moviePlayer && moviePlayer.isBeingDismissed) {
+            [self cleanup];
+            
+            stopFrameObserve = YES;
+            NSLog(@"Close button clicked");
+            [self
+             fireEvent:@"streamingplayer:close"
+             data:@{
+                    }];
+        }
     }
 }
 
@@ -440,7 +462,6 @@
             }];
     if( (AVPlayerItemStatusReadyToPlay == movie.currentItem.status) ) {
         state[@(index)] = @(AVPlayerTimeControlStatusPlaying);
-        allowSwipe = YES;
         [self
          fireEvent:@"streamingplayer:play"
          data:@{
@@ -454,14 +475,22 @@
     NSLog(@"Playback did finish with error message being %@", notification.userInfo);
     int index = [movie getIndex];
     if(index > 0) {
-        index--;
+        if(index == 10) {
+            if(!lastAgain) {
+                lastAgain = true;
+                index--;
+            }
+        } else {
+            index--;
+            lastAgain = false;
+        }
     }
     [self
      fireEvent:@"streamingplayer:trackEnd"
      data:@{
             @"index" : [NSNumber numberWithInt:index],
     }];
-    if(![movie isAtEnd]) {
+    if(![movie isAtEnd:index]) {
         int index = [movie getIndex];
         [self
          fireEvent:@"streamingplayer:trackChange"
@@ -470,7 +499,6 @@
                 @"direction" : @1,
                 }];
     } else {
-        int index = [movie getIndex];
         [self
          fireEvent:@"streamingplayer:end"
          data:@{
@@ -511,16 +539,6 @@
 
 -(void) timerTick:(NSTimer*)timer {
     //NSLog(@"Checking for is closed");
-    if (moviePlayer.player.rate == 0 &&
-        (moviePlayer.isBeingDismissed || moviePlayer.nextResponder == nil)) {
-        NSLog(@"Close button clicked");
-        [self cleanup];
-        [self
-         fireEvent:@"streamingplayer:close"
-         data:@{
-                }];
-        
-    }
     int index = [movie getIndex];
     NSNumber *timeStatus = @(movie.timeControlStatus);
     

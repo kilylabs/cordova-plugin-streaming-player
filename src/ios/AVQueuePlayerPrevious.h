@@ -39,6 +39,7 @@
 -(void)playItemIdx:(int)idx;
 -(Boolean)isAtBeginning;
 -(Boolean)isAtEnd;
+-(Boolean)isAtEnd:(int)idx;
 -(int)getIndex;
 
 // This notification is called whenever an item finishes playing; it advances the now playing index by 1.
