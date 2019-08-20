@@ -276,7 +276,8 @@
                                                          name:@"AVPlayerStatusChangeNotification"
                                                        object:movie];
             
-            [movie addObserver:self forKeyPath:@"status" options:0 context:nil];
+            [[items objectAtIndex:songPointer] removeObserver:self forKeyPath:@"status"];
+
         } else {
 
             // Listen for playback finishing
@@ -331,9 +332,10 @@
          object:object];
     } else if(!stopFrameObserve && (object == moviePlayer) && [keyPath isEqualToString:@"view.frame"]) {
         if(moviePlayer && moviePlayer.isBeingDismissed) {
+            stopFrameObserve = YES;
+
             [self cleanup];
             
-            stopFrameObserve = YES;
             NSLog(@"Close button clicked");
             [self
              fireEvent:@"streamingplayer:close"
@@ -573,6 +575,7 @@
 - (void)cleanup {
     NSLog(@"Clean up called");
     initFullscreen = false;
+    stopFrameObserve = false;
     
     [self handleItemListeners: YES];
     
