@@ -25,12 +25,13 @@
 {
     // This is a flag used to mark whether an item being added to the queue is being added by playPreviousItem (which requires slightly different functionality then in the general case) or if it is being added by an external call
     Boolean isCalledFromPlayPreviousItem;
-    
     // Adding previous song functionality requires two new class variables: one array to hold the items that the player has been initialized with (to re-create the player when necessary), and one NSNumber to keep track of which song is currently playing (to determine from where the player should be re-populated
-    int nowPlayingIndex;
     int itemsCount;
+    
+
 }
 
+@property (nonatomic) int nowPlayingIndex;
 @property (nonatomic, weak) id <AVQueuePlayerPreviousDelegate> delegate;
 @property (nonatomic, strong) NSMutableArray *itemsForPlayer;
 

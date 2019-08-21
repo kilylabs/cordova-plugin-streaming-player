@@ -45,6 +45,7 @@
     BOOL allowSwipe;
     BOOL stopFrameObserve;
     BOOL lastAgain;
+    BOOL stopNotifying;
 }
 
 -(void)play:(CDVInvokedUrlCommand *) command {
@@ -136,8 +137,23 @@
 
 -(void) prev{
     if(![movie isAtBeginning]) {
+        int old_idx = [[movie valueForKey:@"nowPlayingIndex"] intValue];
+        stopNotifying = YES; //IT IS VERY IMPORTANT
         [movie playPreviousItem];
+        stopNotifying = NO; //IT IS VERY IMPORTANT
+        int new_idx = [movie getIndex];
         //allowSwipe = NO;
+        [self
+         fireEvent:@"streamingplayer:trackEnd"
+         data:@{
+                @"index" : @(old_idx),
+                }];
+        [self
+         fireEvent:@"streamingplayer:trackChange"
+         data:@{
+                @"index" : @(new_idx),
+                @"direction" : @(0),
+                }];
     }
 }
 
@@ -195,38 +211,66 @@
     if(@available(iOS 11.0, *)) { [moviePlayer setEntersFullScreenWhenPlaybackBegins:YES]; }
     
     // setup listners
-    [self handleBaseListeners];
+    [self handleBaseListeners: NO];
     [self handleItemListeners: NO];
     
     // present modally so we get a close button
     [self.viewController presentViewController:moviePlayer animated:YES completion:^(void){
         [self->moviePlayer.player play];
         if(self->playIndex) {
+            stopNotifying = YES;
             [self->movie playItemIdx: self->playIndex];
+            stopNotifying = NO;
         }
     }];
     
 }
 
-- (void) handleBaseListeners {
+- (void) handleBaseListeners: (bool)remove {
     
-    // Listen for re-maximize
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(appDidBecomeActive:)
-                                                 name:UIApplicationDidBecomeActiveNotification
-                                               object:nil];
-    
-    // Listen for minimize
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(appDidEnterBackground:)
-                                                 name:UIApplicationDidEnterBackgroundNotification
-                                               object:nil];
-    
-    timer = [NSTimer scheduledTimerWithTimeInterval:0.2
-                                             target:self
-                                           selector:@selector(timerTick:)
-                                           userInfo:nil
-                                            repeats:YES];
+    if(remove) {
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidEnterBackgroundNotification object:nil];
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:@"AVPlayerEnded" object:movie];
+
+        if(timer) {
+            [timer  invalidate];
+            timer = nil;
+        }
+        
+        [moviePlayer removeObserver:self forKeyPath:@"view.frame"];
+        
+        [movie removeObserver:self forKeyPath:@"nowPlayingIndex"];
+
+    } else {
+        timer = [NSTimer scheduledTimerWithTimeInterval:0.2
+                                                 target:self
+                                               selector:@selector(timerTick:)
+                                               userInfo:nil
+                                                repeats:YES];
+        
+        // Listen for re-maximize
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(appDidBecomeActive:)
+                                                     name:UIApplicationDidBecomeActiveNotification
+                                                   object:nil];
+        
+        // Listen for minimize
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(appDidEnterBackground:)
+                                                     name:UIApplicationDidEnterBackgroundNotification
+                                                   object:nil];
+
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(appPlayerEnded:)
+                                                     name:@"AVPlayerEnded"
+                                                   object:movie];
+
+        [moviePlayer addObserver:self forKeyPath:@"view.frame" options:0 context:nil];
+
+        [movie addObserver:self forKeyPath:@"nowPlayingIndex" options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld context:nil];
+
+    }
     
 
 
@@ -234,12 +278,6 @@
 
 - (void) handleItemListeners: (bool)remove {
 
-    if(remove) {
-        [moviePlayer removeObserver:self forKeyPath:@"view.frame"];
-    } else {
-        [moviePlayer addObserver:self forKeyPath:@"view.frame" options:0 context:nil];
-    }
-    
     for (int songPointer = 0; songPointer < [items count]; songPointer++) {
 
         if(remove) {
@@ -330,6 +368,43 @@
         [[NSNotificationCenter defaultCenter]
          postNotificationName:@"AVPlayerStatusChangeNotification"
          object:object];
+    } else if([keyPath isEqualToString:@"nowPlayingIndex"]) {
+        NSLog(@"NOW PLAYING INDEX IS: %@", change);
+        if(!stopNotifying) {
+            [self
+             fireEvent:@"streamingplayer:trackEnd"
+             data:@{
+                    @"index" : [change objectForKey:@"old"],
+             }];
+            if(![movie isAtEnd:[[change objectForKey:@"old"] intValue]]) {
+                NSNumber *dir = nil;
+                if([[change objectForKey:@"new"] intValue] > [[change objectForKey:@"old"] intValue]) {
+                    dir = @(1);
+                } else if([[change objectForKey:@"new"] intValue] < [[change objectForKey:@"old"] intValue]) {
+                    dir = @(0);
+                }
+                
+                if(dir != nil) {
+                    [self
+                     fireEvent:@"streamingplayer:trackChange"
+                     data:@{
+                        @"index" : [change objectForKey:@"new"],
+                        @"direction" : dir,
+                    }];
+                    if([[change objectForKey:@"new"] intValue] < [[change objectForKey:@"old"] intValue]) {
+                        //stopNotifying = YES;
+                    }
+                }
+            } else {
+                [self
+                 fireEvent:@"streamingplayer:end"
+                 data:@{
+                        @"index" : [change objectForKey:@"new"],
+                        }];
+                
+            }
+        }
+
     } else if(!stopFrameObserve && (object == moviePlayer) && [keyPath isEqualToString:@"view.frame"]) {
         if(moviePlayer && moviePlayer.isBeingDismissed) {
             stopFrameObserve = YES;
@@ -430,25 +505,12 @@
 }
 
 - (void) onNextTrack:(NSNotification*)notification {
-    NSLog(@"appDidBecomeActive");
-    int index = [movie getIndex];
-    [self
-     fireEvent:@"streamingplayer:trackChange"
-     data:@{
-            @"index" : [NSNumber numberWithInt:index],
-            @"direction" : @1,
-            }];
+    NSLog(@"onNextTrack");
+
 }
 
 - (void) onPrevTrack:(NSNotification*)notification {
-    NSLog(@"appDidBecomeActive");
-    int index = [movie getIndex];
-    [self
-     fireEvent:@"streamingplayer:trackChange"
-     data:@{
-            @"index" : [NSNumber numberWithInt:index],
-            @"direction" : @0,
-            }];
+    NSLog(@"onPrevTrack");
 }
 
 - (void)appMovieStatusChange:(NSNotification*)notification {
@@ -473,41 +535,25 @@
     }
 }
 
-- (void) moviePlayBackDidFinish:(NSNotification*)notification {
-    NSLog(@"Playback did finish with error message being %@", notification.userInfo);
-    int index = [movie getIndex];
-    if(index > 0) {
-        if(index == 10) {
-            if(!lastAgain) {
-                lastAgain = true;
-                index--;
-            }
-        } else {
-            index--;
-            lastAgain = false;
-        }
-    }
+- (void) appPlayerEnded:(NSNotification*)notification {
+    NSLog(@"appPlayerEnded %@", notification.userInfo);
+
     [self
      fireEvent:@"streamingplayer:trackEnd"
      data:@{
-            @"index" : [NSNumber numberWithInt:index],
-    }];
-    if(![movie isAtEnd:index]) {
-        int index = [movie getIndex];
-        [self
-         fireEvent:@"streamingplayer:trackChange"
-         data:@{
-                @"index" : [NSNumber numberWithInt:index],
-                @"direction" : @1,
-                }];
-    } else {
-        [self
-         fireEvent:@"streamingplayer:end"
-         data:@{
-                @"index" : [NSNumber numberWithInt:index],
-                }];
+            @"index" : [NSNumber numberWithInt:[movie getIndex]],
+            }];
+    [self
+     fireEvent:@"streamingplayer:end"
+     data:@{
+            @"index" : [NSNumber numberWithInt:[movie getIndex]],
+            }];
+}
 
-    }
+- (void) moviePlayBackDidFinish:(NSNotification*)notification {
+    NSLog(@"Playback did finish with error message being %@", notification.userInfo);
+    NSLog(@"moviePlayBackDidFinish %d", [movie getIndex]);
+
     /*
     NSDictionary *notificationUserInfo = [notification userInfo];
     NSNumber *errorValue = [notificationUserInfo objectForKey:AVPlayerItemFailedToPlayToEndTimeErrorKey];
@@ -577,6 +623,7 @@
     initFullscreen = false;
     stopFrameObserve = false;
     
+    [self handleBaseListeners: YES];
     [self handleItemListeners: YES];
     
     if (moviePlayer) {
@@ -585,10 +632,7 @@
         moviePlayer = nil;
     }
     
-    if(timer) {
-        [timer  invalidate];
-        timer = nil;
-    }
+
 }
 
 -(void) fireEvent:(NSString *) name data:(NSDictionary *) data {

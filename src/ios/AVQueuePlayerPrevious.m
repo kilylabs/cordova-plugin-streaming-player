@@ -17,7 +17,8 @@
   self = [super init];
   if(self){
     self.itemsForPlayer = [NSMutableArray arrayWithArray:nil];
-    nowPlayingIndex = 0;
+    [self setValue:@(0) forKey:@"nowPlayingIndex"];
+
     isCalledFromPlayPreviousItem = NO;
   }
   return self;
@@ -31,7 +32,7 @@
     self = [super initWithItems:items];
     if (self){
         self.itemsForPlayer = [NSMutableArray arrayWithArray:items];
-        nowPlayingIndex = 0;
+        [self setValue:@(0) forKey:@"nowPlayingIndex"];
         isCalledFromPlayPreviousItem = NO;
         for (int songPointer = 0; songPointer < itemsCount; songPointer++) {
             [[NSNotificationCenter defaultCenter] addObserver:self
@@ -58,8 +59,15 @@
     // This method is called by NSNotificationCenter when a song finishes playing; all it does is increment
     // nowPlayingIndex
     [self.delegate queuePlayerDidReceiveNotificationForSongIncrement:self];
-    if (nowPlayingIndex < itemsCount - 1){
-        nowPlayingIndex++;
+    int idx = [[self valueForKey:@"nowPlayingIndex"] intValue];
+
+    if (idx < (itemsCount - 1) ){
+        idx++;
+        [self setValue:@(idx) forKey:@"nowPlayingIndex"];
+    } else {
+        [[NSNotificationCenter defaultCenter]
+         postNotificationName:@"AVPlayerEnded"
+         object:self];
     }
 }
 
@@ -70,12 +78,14 @@
     // It should be noted that if the player is on its first song, this function will do nothing. It will
     // not restart the song or anything like that; if you want that functionality you can implement it
     // yourself fairly easily using the isAtBeginning method to test if the player is at its start.
-    if (nowPlayingIndex>0){
+    int idx = [[self valueForKey:@"nowPlayingIndex"] intValue];
+
+    if (idx>0){
         [self pause];
         // Note: it is necessary to have seekToTime called twice in this method, once before and once after re-making the area. If it is not present before, the player will resume from the same spot in the next song when the previous song finishes playing; if it is not present after, the previous song will be played from the same spot that the current song was on.
         [self seekToTime:kCMTimeZero toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
         // The next two lines are necessary since RemoveAllItems resets both the nowPlayingIndex and _itemsForPlayer
-        int tempNowPlayingIndex = nowPlayingIndex;
+        int tempNowPlayingIndex = idx;
         NSMutableArray *tempPlaylist = [[NSMutableArray alloc]initWithArray:_itemsForPlayer];
         [self removeAllItems];
         isCalledFromPlayPreviousItem = YES;
@@ -84,7 +94,8 @@
         }
         isCalledFromPlayPreviousItem = NO;
         // The temp index is necessary since removeAllItems resets the nowPlayingIndex
-        nowPlayingIndex = tempNowPlayingIndex - 1;
+        [self setValue:@(tempNowPlayingIndex - 1) forKey:@"nowPlayingIndex"];
+
         // Not a typo; see above comment
         [self seekToTime:kCMTimeZero toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
         [self play];
@@ -100,9 +111,11 @@
     // This function simply returns whether or not the AVQueuePlayerPrevious is at the first song. This is
     // useful for implementing custom behavior if the user tries to play a previous song at the start of
     // the queue (such as restarting the song).
-    NSLog(@"isAtBeginning called: %d:%d",nowPlayingIndex,0);
+    int idx = [[self valueForKey:@"nowPlayingIndex"] intValue];
 
-    if (nowPlayingIndex == 0){
+    NSLog(@"isAtBeginning called: %d:%d",idx,0);
+
+    if (idx == 0) {
         return YES;
     } else {
         return NO;
@@ -111,7 +124,7 @@
 
 -(Boolean)isAtEnd
 {
-    return [self isAtEnd:nowPlayingIndex];
+    return [self isAtEnd:[[self valueForKey:@"nowPlayingIndex"] intValue]];
 }
 
 -(Boolean)isAtEnd: (int)idx
@@ -121,7 +134,7 @@
     // the queue (such as restarting the song).
     NSLog(@"isAtEnd called: %d:%d",idx,itemsCount-1);
     
-    if (idx == itemsCount - 1){
+    if (idx == (itemsCount - 1)){
         return YES;
     } else {
         return NO;
@@ -132,7 +145,8 @@
 -(int)getIndex
 {
     // This method simply returns the now playing index
-    return nowPlayingIndex;
+    return [[self valueForKey:@"nowPlayingIndex"] intValue];
+;
 }
 
 // OVERRIDDEN AVQUEUEPLAYER METHODS
@@ -142,7 +156,7 @@
     // This does the same thing as the normal AVQueuePlayer removeAllItems, but also sets the
     // nowPlayingIndex to 0.
     [super removeAllItems];
-    nowPlayingIndex = 0;
+    [self setValue:@(0) forKey:@"nowPlayingIndex"];
     [_itemsForPlayer removeAllObjects];
 }
 
@@ -154,13 +168,15 @@
     // It also subtracts 1 from the nowPlayingIndex for every time the item shows up in the itemsForPlayer
     // array before the current value.
     [super removeItem:item];
+    int idx = [[self valueForKey:@"nowPlayingIndex"] intValue];
+
     int appearancesBeforeCurrent = 0;
-    for (int tracer = 0; tracer < nowPlayingIndex; tracer++){
+    for (int tracer = 0; tracer < idx; tracer++){
         if ([_itemsForPlayer objectAtIndex:tracer] == item) {
             appearancesBeforeCurrent++;
         }
     }
-    nowPlayingIndex -= appearancesBeforeCurrent;
+    [self setValue:@(idx - appearancesBeforeCurrent) forKey:@"nowPlayingIndex"];
     [_itemsForPlayer removeObject:item];
 }
 
@@ -168,8 +184,9 @@
 {
     // The only addition this method makes to AVQueuePlayer is advancing the nowPlayingIndex by 1.
     [super advanceToNextItem];
-    if (nowPlayingIndex < itemsCount - 1) {
-        nowPlayingIndex++;
+    int idx = [[self valueForKey:@"nowPlayingIndex"] intValue];
+    if (idx < itemsCount - 1) {
+        [self setValue:@(idx + 1) forKey:@"nowPlayingIndex"];
     }
     
     [[NSNotificationCenter defaultCenter]
@@ -185,10 +202,12 @@
     // This method calls the superclass to add the new item to the AVQueuePlayer, then adds that item to the
     // proper location in the itemsForPlayer array and increments the nowPlayingIndex if necessary.
     [super insertItem:item afterItem:afterItem];
+    int idx = [[self valueForKey:@"nowPlayingIndex"] intValue];
+
     if (!isCalledFromPlayPreviousItem){
-        if ([_itemsForPlayer indexOfObject:item] < nowPlayingIndex)
+        if ([_itemsForPlayer indexOfObject:item] < idx)
             {
-            nowPlayingIndex++;
+                [self setValue:@(idx + 1) forKey:@"nowPlayingIndex"];
             }
     }
     if ([_itemsForPlayer containsObject:afterItem]){ // AfterItem is non-nil
@@ -203,7 +222,9 @@
 }
 
 -(void)playItemIdx:(int)idx {
-    int diff = idx - nowPlayingIndex;
+    int npi = [[self valueForKey:@"nowPlayingIndex"] intValue];
+
+    int diff = idx - npi;
     
     if(diff == 0) {
         
