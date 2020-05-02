@@ -1,5 +1,5 @@
 {
-  "name": "cordova-plugin-streaming-media",
+  "name": "cordova-plugin-streaming-player",
   "version": "2.2.0",
   "description": "This plugin allows you to stream audio and video in a fullscreen, native player on iOS and Android.",
   "main": "index.js",
